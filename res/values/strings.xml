@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">音频可视化</string>
+    <string name="header_title">音频可视化</string>
+    <string name="header_subtitle">AUDIO VISUALIZER</string>
+    <string name="source_file">文件</string>
+    <string name="source_mic">麦克风</string>
+    <string name="source_media">媒体音频</string>
+    <string name="source_image_audio">图生声</string>
+    <string name="mode_xt">XT 时域</string>
+    <string name="mode_xy">XY 相图</string>
+    <string name="mode_fft">FFT 频谱</string>
+    <string name="settings">参数</string>
+    <string name="hold">HOLD</string>
+    <string name="run">RUN</string>
+    <string name="status_idle">待机</string>
+    <string name="action_import">导入音频</string>
+    <string name="action_stop">停止监听</string>
+    <string name="footer_raw">● RAW PCM</string>
+    <string name="footer_no_resample">原生采样率 · 无重采样</string>
+    <string name="metric_rate">采样率</string>
+    <string name="metric_channels">声道</string>
+    <string name="metric_peak">峰值</string>
+    <string name="metric_scale">档位</string>
+    <string name="file_time_placeholder">00:00 / 00:00</string>
+    <string name="no_signal_title">等待音频信号</string>
+    <string name="no_signal_body">导入音频 · 监听麦克风 · 捕获媒体音频</string>
+    <string name="media_channel_name">媒体音频监听</string>
+    <string name="media_notification_title">音频可视化正在监听媒体音频</string>
+    <string name="media_notification_text">仅采集允许被录制的媒体播放 · 点按返回示波器</string>
+    <string name="media_notification_stop">停止</string>
+</resources>

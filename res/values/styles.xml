@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.WaveScope" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg_deep</item>
+        <item name="android:navigationBarColor">@color/bg_deep</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/cyan</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+
+    <style name="Text" />
+
+    <style name="Text.Tab">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/seg_text</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <style name="Text.ModeTab">
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/seg_text</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <style name="Text.ChartTool">
+        <item name="android:textSize">9.5sp</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:textColor">@color/seg_text</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <style name="Text.MetricLabel">
+        <item name="android:textSize">8sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:letterSpacing">0.12</item>
+    </style>
+
+    <style name="Text.MetricValue">
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="FileProgress" parent="@android:style/Widget.Material.ProgressBar.Horizontal">
+        <item name="android:progressTint">@color/cyan</item>
+        <item name="android:progressBackgroundTint">@color/stroke</item>
+        <item name="android:minHeight">2dp</item>
+        <item name="android:maxHeight">2dp</item>
+        <item name="android:max">1000</item>
+    </style>
+
+    <style name="FileSeek" parent="@android:style/Widget.Material.SeekBar">
+        <item name="android:progressTint">@color/cyan</item>
+        <item name="android:progressBackgroundTint">@color/stroke</item>
+        <item name="android:thumbTint">@color/cyan</item>
+        <item name="android:minHeight">30dp</item>
+        <item name="android:maxHeight">30dp</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+    </style>
+
+    <style name="MiniSeek" parent="@android:style/Widget.Material.SeekBar">
+        <item name="android:progressTint">@color/cyan</item>
+        <item name="android:progressBackgroundTint">@color/stroke</item>
+        <item name="android:thumbTint">@color/cyan</item>
+        <item name="android:minHeight">22dp</item>
+        <item name="android:maxHeight">22dp</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+    </style>
+
+    <style name="Text.DialogLabel">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+
+    <style name="Text.DialogValue">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/cyan</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+</resources>

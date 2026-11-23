@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#05090F</color>
+    <color name="bg_deep">#03070B</color>
+    <color name="surface">#0C141E</color>
+    <color name="surface_high">#0F1924</color>
+    <color name="scope_bg">#071019</color>
+    <color name="stroke">#1B2A39</color>
+    <color name="stroke_soft">#14222F</color>
+    <color name="stroke_bright">#2A4355</color>
+    <color name="text">#E9F5F4</color>
+    <color name="text_secondary">#8DA1B5</color>
+    <color name="text_muted">#5A6D80</color>
+    <color name="cyan">#3BF2D2</color>
+    <color name="cyan_bright">#78FFE6</color>
+    <color name="cyan_dim">#1B6C61</color>
+    <color name="cyan_surface">#12332F</color>
+    <color name="amber">#FFB35C</color>
+    <color name="amber_dim">#7C592F</color>
+    <color name="magenta">#FF6E9C</color>
+    <color name="danger">#FF7171</color>
+    <color name="grid">#14212D</color>
+    <color name="grid_major">#203442</color>
+    <color name="dark_ink">#03110E</color>
+    <color name="transparent">#00000000</color>
+    <color name="hold_bg">#B30A141D</color>
+    <color name="seg_text_off">#8598AB</color>
+    <color name="hold_text_off">#7F94A8</color>
+    <color name="hold_text_on">#06120E</color>
+    <color name="icon_bg">#060C12</color>
+</resources>

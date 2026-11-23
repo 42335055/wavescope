@@ -1,0 +1,10 @@
+build/
+sdk/
+tools/
+test/
+*.jks
+*.keystore
+*.apk
+*.zip
+.gradle/
+local.properties
