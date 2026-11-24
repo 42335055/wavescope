@@ -408,7 +408,9 @@ public final class MainActivity extends Activity {
         updateHoldUi();
         scope.setHint("等待音频信号", "导入音频 · 监听麦克风 · 捕获媒体音频");
 
-        if (MediaCaptureService.isRunning()) {
+        // Android 的媒体音频捕获授权不能永久保存。只在配置变更/旋转后恢复
+        // 当前会话；全新启动时不自动恢复，避免每次打开应用都弹系统录屏授权。
+        if (savedInstanceState != null && MediaCaptureService.isRunning()) {
             restoreMediaCapture();
         }
         updateUi();

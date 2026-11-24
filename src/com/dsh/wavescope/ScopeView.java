@@ -2465,7 +2465,7 @@ public final class ScopeView extends View {
             modeName = "XT";
         }
         StringBuilder sb = new StringBuilder(1 << 20);
-        sb.append("# AudioVisualizer 1.0.28 data export\n");
+        sb.append("# AudioVisualizer 1.0.29 data export\n");
         sb.append("# generated=")
                 .append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()))
                 .append("\n");
