@@ -37,8 +37,8 @@ echo "[2/6] Linking resources and manifest"
   --auto-add-overlay \
   --min-sdk-version 23 \
   --target-sdk-version 33 \
-  --version-code 62 \
-  --version-name "1.0.30" \
+  --version-code 77 \
+  --version-name "1.1" \
   "$BUILD/res/resources.zip"
 
 echo "[3/6] Compiling Java"

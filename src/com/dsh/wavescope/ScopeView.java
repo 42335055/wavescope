@@ -58,6 +58,8 @@ public final class ScopeView extends View {
     private static final int MAX_CHART_PICKS = 24;
 
     private AudioPipeline pipeline;
+    private SpectrumWorker spectrumWorker;
+    private PcmFileSource pcmFileSource;
     private AnalysisListener analysisListener;
     private OnSeekListener seekListener;
 
@@ -103,9 +105,6 @@ public final class ScopeView extends View {
     private boolean xyPixelMode = false;
     private float xyPixelSizeDp = 2.5f;
     private boolean showMeasurements = true;
-    private boolean preRenderFft = true;
-    private boolean spectrumCacheValid;
-    private long spectrumCacheAt;
     private float waterfallSpeed = 1.0f;
     private float waterfallBlack = 0.0f;
     private float waterfallWhite = 1.0f;
@@ -153,6 +152,7 @@ public final class ScopeView extends View {
     private Canvas specHistoryScratchCanvas;
     private int specHistoryW;
     private int specHistoryH;
+    private int specHistoryHead;
     private int[] specHistoryRow = new int[0];
 
     private final RectF plot = new RectF();
@@ -473,6 +473,12 @@ public final class ScopeView extends View {
 
     public void setPipeline(AudioPipeline pipeline) {
         this.pipeline = pipeline;
+        if (spectrumWorker == null) {
+            spectrumWorker = new SpectrumWorker();
+        }
+        spectrumWorker.setFftSize(fftSize);
+        spectrumWorker.setPipeline(pipeline);
+        spectrumWorker.setEnabled(mode == MODE_FFT);
         spectrumInitialized = false;
         lastAnalysisAt = 0;
         resetXyState();
@@ -493,8 +499,10 @@ public final class ScopeView extends View {
         if (this.mode != mode) {
             boolean touchesXy = this.mode == MODE_XY || mode == MODE_XY;
             this.mode = mode;
+            if (spectrumWorker != null) {
+                spectrumWorker.setEnabled(mode == MODE_FFT);
+            }
             spectrumInitialized = false;
-            spectrumCacheValid = false;
             if (touchesXy) {
                 resetXyState();
                 if (mode != MODE_XY) {
@@ -558,14 +566,6 @@ public final class ScopeView extends View {
         if (this.xySwap != swap) {
             this.xySwap = swap;
             resetXyState();
-            invalidate();
-        }
-    }
-
-    public void setPreRenderFft(boolean enabled) {
-        if (preRenderFft != enabled) {
-            preRenderFft = enabled;
-            spectrumCacheValid = false;
             invalidate();
         }
     }
@@ -653,6 +653,9 @@ public final class ScopeView extends View {
         }
         if (this.fftSize != size) {
             this.fftSize = size;
+            if (spectrumWorker != null) {
+                spectrumWorker.setFftSize(size);
+            }
             spectrumInitialized = false;
             resetSpectrumHistory();
             if (frozen) {
@@ -752,7 +755,6 @@ public final class ScopeView extends View {
 
     public void resetAnalysis() {
         spectrumInitialized = false;
-        spectrumCacheValid = false;
         lastPeakDb = -120.0f;
         lastDominantHz = 0.0f;
         lastHadSignal = false;
@@ -841,9 +843,29 @@ public final class ScopeView extends View {
     }
 
     public void setPlaybackPositionUs(long positionUs) {
-        playbackPositionUs = Math.max(0L, positionUs);
+        long next = Math.max(0L, positionUs);
+        if (next == playbackPositionUs) return;
+        playbackPositionUs = next;
+        if (spectrumWorker != null) {
+            spectrumWorker.setPositionUs(playbackPositionUs);
+        }
         if (fullSpectrogram != null && mode == MODE_FFT) {
             invalidate();
+        }
+    }
+
+    public void setPcmSource(PcmFileSource source) {
+        pcmFileSource = source;
+        if (spectrumWorker != null) {
+            spectrumWorker.setPcmSource(source);
+        }
+        invalidate();
+    }
+
+    public void clearPcmSource() {
+        pcmFileSource = null;
+        if (spectrumWorker != null) {
+            spectrumWorker.setPcmSource(null);
         }
     }
 
@@ -1425,6 +1447,12 @@ public final class ScopeView extends View {
             return;
         }
         String text = fpsText;
+        if (mode == MODE_FFT && spectrumWorker != null) {
+            float sfps = spectrumWorker.getFps();
+            text += sfps > 0f
+                    ? String.format(Locale.US, " · FFT %.0f", sfps)
+                    : " · FFT --";
+        }
         overlayTextPaint.setTextSize(sp(7.6f));
         overlayTextPaint.setTextAlign(Paint.Align.RIGHT);
         overlayTextPaint.setColor(colorCyan);
@@ -1514,7 +1542,10 @@ public final class ScopeView extends View {
                 plot.set(plot.left, top, plot.right, specBottom);
                 historyPlot.set(plot.left, specBottom + labelGap, plot.right, bottom);
             } else {
-                float gap = dp(8);
+                // Leave room for the frequency axis labels between the live
+                // spectrum and the waterfall; otherwise they are covered by
+                // the history bitmap.
+                float gap = dp(24);
                 float historyH = Math.max(dp(56), available * 0.30f);
                 if (available - historyH - gap < dp(76)) {
                     historyH = Math.max(dp(34), available - gap - dp(76));
@@ -1724,41 +1755,42 @@ public final class ScopeView extends View {
         float viewMin = spectrumViewMin(rate);
         float viewMax = spectrumViewMax(rate);
         boolean fullSpec = fullSpectrogram != null;
-        float axisY = fullSpec
-                ? plot.bottom + dp(12)
-                : (historyPlot.isEmpty() ? plot.bottom + dp(12) : historyPlot.bottom + dp(12));
-        float gridBottom = fullSpec
-                ? plot.bottom
-                : (historyPlot.isEmpty() ? plot.bottom : historyPlot.bottom);
+        float axisY = plot.bottom + dp(12);
+        float gridBottom = plot.bottom;
         if (logFrequency) {
             float fMin = viewMin;
-            float[] marks = {20f, 50f, 100f, 200f, 500f, 1000f, 2000f, 5000f, 10000f, 20000f};
-            float lastLabelX = -1000f;
-            for (float f : marks) {
-                if (f < fMin || f > viewMax) {
-                    continue;
+            // Dense 1-2-...-9-per-decade ticks: 10..90, 100..900,
+            // 1K..9K, 10K..20K for normal audio sample rates.
+            float[] ticks = {
+                    10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+                    200, 300, 400, 500, 600, 700, 800, 900, 1000,
+                    2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000,
+                    10000, 20000
+            };
+            List<Float> marks = new ArrayList<>();
+            for (float f : ticks) {
+                if (f >= fMin && f <= viewMax) {
+                    marks.add(f);
                 }
+            }
+            float lastLabelRight = -1e9f;
+            // A log axis cannot really contain 0; draw it just outside the
+            // left edge so the 10 Hz tick still has room.
+            labelPaint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText("0", plot.left - dp(3), axisY, labelPaint);
+            labelPaint.setTextAlign(Paint.Align.LEFT);
+            for (float f : marks) {
                 float x = freqToX(f, fMin, viewMax);
                 canvas.drawLine(x, plot.top, x, gridBottom, gridPaint);
                 String text = shortFreq(f);
                 float w = labelPaint.measureText(text);
-                if (x - w / 2 > lastLabelX + dp(6) && x - w / 2 >= plot.left
-                        && x + w / 2 <= plot.right) {
+                float left = x - w / 2f;
+                if (left > lastLabelRight + dp(2) && left >= plot.left
+                        && x + w / 2f <= plot.right) {
                     labelPaint.setTextAlign(Paint.Align.CENTER);
                     canvas.drawText(text, x, axisY, labelPaint);
-                    lastLabelX = x + w / 2;
+                    lastLabelRight = x + w / 2f;
                 }
-            }
-            String edge = shortFreq(viewMax);
-            float edgeW = labelPaint.measureText(edge);
-            if (plot.right - edgeW > lastLabelX + dp(6)) {
-                labelPaint.setTextAlign(Paint.Align.RIGHT);
-                canvas.drawText(edge, plot.right, axisY, labelPaint);
-            }
-            labelPaint.setTextAlign(Paint.Align.LEFT);
-            if (viewMin > fMin + 0.5f) {
-                labelPaint.setTextAlign(Paint.Align.LEFT);
-                canvas.drawText(shortFreq(viewMin), plot.left, axisY, labelPaint);
             }
             labelPaint.setTextAlign(Paint.Align.LEFT);
         } else {
@@ -2465,7 +2497,7 @@ public final class ScopeView extends View {
             modeName = "XT";
         }
         StringBuilder sb = new StringBuilder(1 << 20);
-        sb.append("# AudioVisualizer 1.0.30 data export\n");
+        sb.append("# AudioVisualizer 1.1 data export\n");
         sb.append("# generated=")
                 .append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()))
                 .append("\n");
@@ -2557,6 +2589,7 @@ public final class ScopeView extends View {
         specHistoryScratchCanvas = null;
         specHistoryW = 0;
         specHistoryH = 0;
+        specHistoryHead = 0;
     }
 
     private void ensureSpectrumHistory(int width, int height) {
@@ -2574,6 +2607,7 @@ public final class ScopeView extends View {
             specHistoryBitmap.eraseColor(Color.BLACK);
             specHistoryScratch.eraseColor(Color.BLACK);
             specHistoryRow = new int[width];
+            specHistoryHead = 0;
         } catch (OutOfMemoryError e) {
             releaseSpectrumHistory();
         }
@@ -2738,24 +2772,26 @@ public final class ScopeView extends View {
         if (rows > 0) {
             waterfallScrollAccum -= rows;
             rows = Math.min(rows, height);
-            if (specHistoryScratchCanvas != null) {
-                specHistoryScratchCanvas.drawBitmap(specHistoryBitmap, 0, -rows, null);
-                for (int r = 0; r < rows; r++) {
-                    specHistoryScratch.setPixels(specHistoryRow, 0, width,
-                            0, height - rows + r, width, 1);
+            // Ring buffer: write new rows at the head instead of copying the
+            // whole history bitmap every frame. At tablet resolution that
+            // copy alone was several megabytes per frame.
+            for (int r = 0; r < rows; r++) {
+                specHistoryBitmap.setPixels(specHistoryRow, 0, width,
+                        0, specHistoryHead, width, 1);
+                specHistoryHead++;
+                if (specHistoryHead >= height) {
+                    specHistoryHead = 0;
                 }
-                Bitmap temp = specHistoryBitmap;
-                specHistoryBitmap = specHistoryScratch;
-                specHistoryScratch = temp;
-                Canvas tc = specHistoryCanvas;
-                specHistoryCanvas = specHistoryScratchCanvas;
-                specHistoryScratchCanvas = tc;
             }
         }
 
         canvas.save();
         canvas.clipRect(historyPlot);
-        canvas.drawBitmap(specHistoryBitmap, historyPlot.left, historyPlot.top,
+        int offsetY = (height - specHistoryHead) % height;
+        float drawY = historyPlot.top + offsetY;
+        canvas.drawBitmap(specHistoryBitmap, historyPlot.left, drawY,
+                historyBitmapPaint);
+        canvas.drawBitmap(specHistoryBitmap, historyPlot.left, drawY - height,
                 historyBitmapPaint);
         canvas.restore();
         canvas.drawRect(historyPlot, gridMajorPaint);
@@ -2764,6 +2800,7 @@ public final class ScopeView extends View {
         overlayTextPaint.setTextAlign(Paint.Align.LEFT);
         overlayTextPaint.setTextSize(sp(7.0f));
         canvas.drawText("HISTORY", historyPlot.left + dp(5), historyPlot.top + dp(10), overlayTextPaint);
+        drawHistoryTimeAxis(canvas);
         overlayTextPaint.setTextSize(sp(8.0f));
         overlayTextPaint.setTextAlign(Paint.Align.RIGHT);
         canvas.drawText("now", historyPlot.right - dp(5), historyPlot.bottom - dp(4), overlayTextPaint);
@@ -2773,6 +2810,53 @@ public final class ScopeView extends View {
         overlayTextPaint.setColor(Color.RED);
         canvas.drawText("L", historyPlot.right - dp(19), historyPlot.top + dp(10), overlayTextPaint);
         overlayTextPaint.setTextSize(sp(8.0f));
+        overlayTextPaint.setTextAlign(Paint.Align.LEFT);
+    }
+
+    private void drawHistoryTimeAxis(Canvas canvas) {
+        float height = historyPlot.height();
+        if (height < 12 || waterfallSpeed <= 0.001f) {
+            return;
+        }
+        float fps = fpsValue > 2.0f ? fpsValue : 60.0f;
+        float rowsPerSecond = Math.max(0.1f, waterfallSpeed * fps);
+        float spanSeconds = height / rowsPerSecond;
+        if (spanSeconds <= 0.15f) {
+            return;
+        }
+        double[] steps = {0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60,
+                120, 300, 600, 1800, 3600};
+        double step = steps[steps.length - 1];
+        for (double candidate : steps) {
+            if (spanSeconds / candidate <= 4.5) {
+                step = candidate;
+                break;
+            }
+        }
+        overlayTextPaint.setTextSize(sp(7.0f));
+        overlayTextPaint.setColor(colorMuted);
+        overlayTextPaint.setTextAlign(Paint.Align.RIGHT);
+        float labelRight = historyPlot.left - dp(4);
+        for (double t = 0; t <= spanSeconds + 0.0001; t += step) {
+            float y = historyPlot.bottom
+                    - (float) (t / spanSeconds) * historyPlot.height();
+            if (y < historyPlot.top - dp(1) || y > historyPlot.bottom + dp(1)) {
+                continue;
+            }
+            String label;
+            if (t < 0.95) {
+                label = String.format(Locale.US, "%.1fs", t);
+            } else if (Math.abs(t - Math.round(t)) < 0.05) {
+                label = String.format(Locale.US, "%.0fs", t);
+            } else {
+                label = String.format(Locale.US, "%.1fs", t);
+            }
+            float baseline = Math.max(historyPlot.top + dp(7),
+                    Math.min(historyPlot.bottom, y + dp(2.5f)));
+            canvas.drawText(label, labelRight, baseline, overlayTextPaint);
+            canvas.drawLine(historyPlot.left, y,
+                    historyPlot.left + dp(4), y, gridPaint);
+        }
         overlayTextPaint.setTextAlign(Paint.Align.LEFT);
     }
 
@@ -2829,53 +2913,23 @@ public final class ScopeView extends View {
 
     private void drawSpectrum(Canvas canvas, int frames, int channels, int sampleRate) {
         ensureSpectrum(sampleRate, channels);
-        int n = fftSize;
-        int bins = n / 2;
-        int stereo = channels >= 2 ? 1 : 0;
-        int used = Math.min(frames, n);
-        int offset = frames - used;
-        float peak = computePeakDb(frames, channels);
-        long now = SystemClock.uptimeMillis();
-        boolean recompute = !preRenderFft || !spectrumCacheValid
-                || now - spectrumCacheAt >= 33L;
-
-        if (recompute) {
-        for (int ch = 0; ch <= stereo; ch++) {
-            for (int i = 0; i < n; i++) {
-                if (i < used) {
-                    int idx = (offset + i) * channels + ch;
-                    fftRe[i] = (frameBuffer[idx] / 32768.0f) * window[i];
-                } else {
-                    fftRe[i] = 0.0f;
-                }
-                fftIm[i] = 0.0f;
-            }
-            Fft.transform(fftRe, fftIm);
-            float[] smooth = ch == 0 ? smoothL : smoothR;
-            for (int b = 0; b <= bins; b++) {
-                float re = fftRe[b];
-                float im = fftIm[b];
-                float mag = (float) Math.sqrt(re * re + im * im);
-                float norm = (b == 0 || b == bins) ? 1.0f : 2.0f;
-                float amp = mag * norm / Math.max(1.0f, windowSum);
-                float db = 20.0f * (float) Math.log10(Math.max(amp, 1e-7f));
-                if (db < -120.0f) db = -120.0f;
-                if (db > 0.0f) db = 0.0f;
-                float old = smooth[b];
-                if (!spectrumInitialized || old == 0.0f) {
-                    smooth[b] = db;
-                } else if (db >= old) {
-                    smooth[b] = old * 0.30f + db * 0.70f;
-                } else {
-                    smooth[b] = old * 0.72f + db * 0.28f;
-                }
-            }
-            spectrumInitialized = true;
+        if (spectrumWorker != null) spectrumWorker.setEnabled(true);
+        SpectrumWorker.Frame sf = spectrumWorker == null ? null : spectrumWorker.getLatest();
+        if (sf == null || sf.fftSize != fftSize || sf.sampleRate != sampleRate
+                || sf.generation != pipeline.getGeneration()) {
+            drawNoSignal(canvas);
+            return;
         }
-        spectrumCacheValid = true;
-        spectrumCacheAt = now;
+        int bins = sf.bins;
+        int stereo = sf.channels >= 2 ? 1 : 0;
+        if (smoothL.length != bins + 1) {
+            smoothL = new float[bins + 1];
+            smoothR = new float[bins + 1];
         }
-
+        System.arraycopy(sf.left, 0, smoothL, 0, bins + 1);
+        System.arraycopy(sf.right, 0, smoothR, 0, bins + 1);
+        spectrumInitialized = true;
+        float peak = sf.peakDb;
         float fMin = spectrumViewMin(sampleRate);
         float fMax = spectrumViewMax(sampleRate);
         int plotWidth = Math.max(1, (int) plot.width());
@@ -3229,11 +3283,9 @@ public final class ScopeView extends View {
             smoothL = new float[bins];
             smoothR = new float[bins];
             spectrumInitialized = false;
-            spectrumCacheValid = false;
         }
         if (spectrumRate != sampleRate || spectrumChannels != channels) {
             spectrumInitialized = false;
-            spectrumCacheValid = false;
             spectrumRate = sampleRate;
             spectrumChannels = channels;
             for (int i = 0; i < smoothL.length; i++) {
@@ -3257,7 +3309,7 @@ public final class ScopeView extends View {
         if (maxHz <= 1.0f) {
             return 0.0f;
         }
-        return Math.min(20.0f, Math.max(1.0f, maxHz / 1000.0f));
+        return Math.min(10.0f, Math.max(1.0f, maxHz / 1000.0f));
     }
 
     private float spectrumViewMin(int sampleRate) {
@@ -3360,13 +3412,18 @@ public final class ScopeView extends View {
     }
 
     private String shortFreq(float hz) {
-        if (hz >= 1000.0f) {
-            if (hz >= 10000.0f) {
-                return String.format(Locale.US, "%.0fk", hz / 1000.0f);
-            }
-            return String.format(Locale.US, "%.1fk", hz / 1000.0f);
-        }
+        if (hz <= 0.0f) return "0";
+        if (hz >= 1_000_000_000.0f) return unitLabel(hz / 1_000_000_000.0f, "G");
+        if (hz >= 1_000_000.0f) return unitLabel(hz / 1_000_000.0f, "M");
+        if (hz >= 1_000.0f) return unitLabel(hz / 1_000.0f, "K");
         return String.format(Locale.US, "%.0f", hz);
+    }
+
+    private String unitLabel(float value, String suffix) {
+        if (Math.abs(value - Math.round(value)) < 0.05f) {
+            return String.format(Locale.US, "%.0f%s", value, suffix);
+        }
+        return String.format(Locale.US, "%.1f%s", value, suffix);
     }
 
     private String formatSmallHz(float hz) {
@@ -3425,6 +3482,10 @@ public final class ScopeView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
+        if (spectrumWorker != null) {
+            spectrumWorker.stop();
+            spectrumWorker = null;
+        }
         releaseFrozenBitmap();
         releaseXyPhosphor();
         if (fullSpectrogram != null) {

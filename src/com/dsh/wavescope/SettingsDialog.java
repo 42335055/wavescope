@@ -278,19 +278,6 @@ public final class SettingsDialog {
         measureRow.addView(measureSwitch);
         content.addView(measureRow);
 
-        LinearLayout preRenderRow = new LinearLayout(activity);
-        preRenderRow.setOrientation(LinearLayout.HORIZONTAL);
-        preRenderRow.setGravity(Gravity.CENTER_VERTICAL);
-        preRenderRow.setPadding(0, dp(density, 8), 0, 0);
-        TextView preRenderLabel = text(activity, "FFT 预渲染缓存", 13, textColor, sans);
-        preRenderRow.addView(preRenderLabel, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        final Switch preRenderSwitch = new Switch(activity);
-        preRenderSwitch.setChecked(config.preRenderFft);
-        styleSwitch(preRenderSwitch, cyan, activity);
-        preRenderRow.addView(preRenderSwitch);
-        content.addView(preRenderRow);
-
         final TextView pixelSizeValue = valueText(activity, "", density, cyan, mono);
         content.addView(sliderHeader(activity, density, "像素大小", pixelSizeValue,
                 textColor, secondary, sans));
@@ -319,10 +306,6 @@ public final class SettingsDialog {
         });
         measureSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             config.showMeasurements = isChecked;
-            onChanged.onChanged(config);
-        });
-        preRenderSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            config.preRenderFft = isChecked;
             onChanged.onChanged(config);
         });
         pixelSizeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -480,7 +463,6 @@ public final class SettingsDialog {
             config.xyPixelSizeDp = defaults.xyPixelSizeDp;
             config.targetFps = defaults.targetFps;
             config.showMeasurements = defaults.showMeasurements;
-            config.preRenderFft = defaults.preRenderFft;
 
             gainBar.setProgress(gainToProgress(config.gain));
             timeBar.setProgress(timeToProgress(config.timePerDivMs));
@@ -493,7 +475,6 @@ public final class SettingsDialog {
             xySwapSwitch.setChecked(config.xySwap);
             pixelSwitch.setChecked(config.xyPixelMode);
             measureSwitch.setChecked(config.showMeasurements);
-            preRenderSwitch.setChecked(config.preRenderFft);
             pixelSizeBar.setProgress(Math.round((config.xyPixelSizeDp - 1.0f) * 10f));
             int resetFps = 0;
             for (int i = 0; i < fpsValues.length; i++) {

@@ -113,6 +113,7 @@ public final class MainActivity extends Activity {
     private FileSpectrogramAnalyzer spectrumAnalyzer;
     private int spectrumToken;
     private WaveformData waveformData;
+    private PcmFileSource pcmSource;
 
     private volatile int source = SRC_NONE;
     private boolean filePreparing;
@@ -124,6 +125,7 @@ public final class MainActivity extends Activity {
     private String currentFileName = "";
     private long fileDurationUs;
     private long filePositionUs;
+    private long filePositionWallAt;
 
     private boolean micStarting;
     private boolean micStarted;
@@ -148,6 +150,13 @@ public final class MainActivity extends Activity {
         public void run() {
             if (!tickerStarted) {
                 return;
+            }
+            if (source == SRC_FILE && filePlaying) {
+                long now = android.os.SystemClock.uptimeMillis();
+                if (filePositionWallAt <= 0L) filePositionWallAt = now;
+                long p = filePositionUs + (now - filePositionWallAt) * 1000L;
+                if (fileDurationUs > 0L && p > fileDurationUs) p = fileDurationUs;
+                scope.setPlaybackPositionUs(p);
             }
             if (isScopeLive() && !scope.isFrozen()) {
                 if (config == null || config.mode != AppConfig.MODE_XY
@@ -213,6 +222,7 @@ public final class MainActivity extends Activity {
                 filePreparing = false;
                 filePlaying = true;
                 filePaused = false;
+                filePositionWallAt = android.os.SystemClock.uptimeMillis();
                 fileCompleted = false;
                 fileError = null;
                 scope.setHint(currentFileIsVideo ? "正在播放视频音轨" : "正在播放",
@@ -238,9 +248,7 @@ public final class MainActivity extends Activity {
                 fileDurationUs = durationUs;
             }
             filePositionUs = positionUs;
-            if (scope != null) {
-                scope.setPlaybackPositionUs(positionUs);
-            }
+            filePositionWallAt = android.os.SystemClock.uptimeMillis();
             updateFilePanel();
         }
 
@@ -570,6 +578,10 @@ public final class MainActivity extends Activity {
             filePlayer.release();
         }
         stopGeneratedAudio();
+        if (pcmSource != null) {
+            pcmSource.close();
+            pcmSource = null;
+        }
         if (!isChangingConfigurations()) {
             stopMediaCaptureServiceOnly();
         }
@@ -728,7 +740,6 @@ public final class MainActivity extends Activity {
         scope.setXyPixelMode(config.xyPixelMode);
         scope.setXyPixelSizeDp(config.xyPixelSizeDp);
         scope.setShowMeasurements(config.showMeasurements);
-        scope.setPreRenderFft(config.preRenderFft);
         scope.setWaterfallSpeed(config.waterfallSpeed);
         scope.setWaterfallLevels(config.waterfallBlack, config.waterfallWhite);
         if (tvWaterfallSpeed != null) {
@@ -1017,12 +1028,14 @@ public final class MainActivity extends Activity {
         } else if (filePaused) {
             filePaused = false;
             filePlaying = true;
+            filePositionWallAt = android.os.SystemClock.uptimeMillis();
             filePlayer.resume();
             updateUi();
         } else if (currentFileUri != null) {
             filePlayer.resume();
             filePlaying = true;
             filePaused = false;
+            filePositionWallAt = android.os.SystemClock.uptimeMillis();
             updateUi();
         }
     }
@@ -1037,6 +1050,7 @@ public final class MainActivity extends Activity {
             updateHoldUi();
         }
         filePositionUs = target;
+        filePositionWallAt = android.os.SystemClock.uptimeMillis();
         filePreparing = true;
         filePlaying = false;
         filePaused = false;
@@ -1339,7 +1353,13 @@ public final class MainActivity extends Activity {
         currentFileIsVideo = false;
         fileDurationUs = 0L;
         filePositionUs = 0L;
+        filePositionWallAt = 0L;
         waveformData = null;
+        if (pcmSource != null) {
+            pcmSource.close();
+            pcmSource = null;
+        }
+        if (scope != null) scope.clearPcmSource();
         if (filePanel != null) {
             filePanel.setVisibility(View.GONE);
         }
@@ -1368,6 +1388,7 @@ public final class MainActivity extends Activity {
         fileError = null;
         fileDurationUs = 0L;
         filePositionUs = Math.max(0L, startUs);
+        filePositionWallAt = android.os.SystemClock.uptimeMillis();
         filePlayingAtPause = false;
         filePositionAtPause = 0L;
         waveformData = null;
@@ -1508,9 +1529,10 @@ public final class MainActivity extends Activity {
                     @Override
                     public void onComplete(Bitmap bitmap, WaveformData waveform,
                                            int sampleRate, int channels,
-                                           long durationUs) {
+                                           long durationUs, PcmFileSource sourcePcm) {
                         if (token != spectrumToken || source != SRC_FILE) {
                             bitmap.recycle();
+                            if (sourcePcm != null) sourcePcm.close();
                             return;
                         }
                         if (fileDurationUs <= 0L) {
@@ -1518,6 +1540,9 @@ public final class MainActivity extends Activity {
                         }
                         waveformData = waveform;
                         scope.setFullSpectrogram(bitmap, sampleRate, durationUs);
+                        if (pcmSource != null) pcmSource.close();
+                        pcmSource = sourcePcm;
+                        scope.setPcmSource(sourcePcm);
                         scope.setPlaybackPositionUs(filePositionUs);
                         scope.invalidate();
                         if (tvAnalysis != null) {

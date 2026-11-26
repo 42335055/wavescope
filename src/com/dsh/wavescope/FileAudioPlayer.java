@@ -48,6 +48,10 @@ public final class FileAudioPlayer {
     private volatile boolean stopRequested;
     private volatile boolean paused;
     private volatile AudioTrack audioTrack;
+    private volatile AudioTrack clockTrack;
+    private volatile int clockRate = 48000;
+    private volatile long clockBaseFrames;
+    private volatile long clockStartUs;
     private volatile boolean released;
 
     private Thread thread;
@@ -71,6 +75,14 @@ public final class FileAudioPlayer {
 
     public boolean isPaused() {
         return paused;
+    }
+
+    public long getPositionUs() {
+        AudioTrack track = clockTrack;
+        if (track == null) return 0L;
+        int head = track.getPlaybackHeadPosition();
+        long frames = clockBaseFrames + head;
+        return clockStartUs + frames * 1_000_000L / Math.max(1, clockRate);
     }
 
     public void open(Uri uri) {
@@ -308,6 +320,10 @@ public final class FileAudioPlayer {
                         if (track == null) {
                             track = createTrack(currentRate, currentChannels, pcmEncoding);
                             audioTrack = track;
+                            clockTrack = track;
+                            clockRate = currentRate;
+                            clockBaseFrames = baseFrames;
+                            clockStartUs = startUs;
                             if (track == null) {
                                 throw new IOException("无法创建原生采样率输出（" + currentRate + " Hz）");
                             }
@@ -533,6 +549,9 @@ public final class FileAudioPlayer {
         try {
             track.release();
         } catch (Exception ignored) {
+        }
+        if (clockTrack == track) {
+            clockTrack = null;
         }
         if (audioTrack == track) {
             audioTrack = null;

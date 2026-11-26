@@ -35,7 +35,6 @@ public final class AppConfig {
     public float xyPixelSizeDp = 2.5f;
     public int targetFps = 60;
     public boolean showMeasurements = true;
-    public boolean preRenderFft = true;
     /** Waterfall scroll speed multiplier (0 = paused). */
     public float waterfallSpeed = 1.0f;
     /** Black/white levels for the waterfall heatmap (0..1). */
@@ -89,7 +88,6 @@ public final class AppConfig {
         c.xyPixelSizeDp = xyPixelSizeDp;
         c.targetFps = targetFps;
         c.showMeasurements = showMeasurements;
-        c.preRenderFft = preRenderFft;
         c.waterfallSpeed = waterfallSpeed;
         c.waterfallBlack = waterfallBlack;
         c.waterfallWhite = waterfallWhite;
@@ -117,7 +115,6 @@ public final class AppConfig {
         c.xyPixelSizeDp = p.getFloat("xyPixelSizeDp", c.xyPixelSizeDp);
         c.targetFps = p.getInt("targetFps", c.targetFps);
         c.showMeasurements = p.getBoolean("showMeasurements", c.showMeasurements);
-        c.preRenderFft = p.getBoolean("preRenderFft", c.preRenderFft);
         c.waterfallSpeed = p.getFloat("waterfallSpeed", c.waterfallSpeed);
         c.waterfallBlack = p.getFloat("waterfallBlack", c.waterfallBlack);
         c.waterfallWhite = p.getFloat("waterfallWhite", c.waterfallWhite);
@@ -146,7 +143,6 @@ public final class AppConfig {
                 .putFloat("xyPixelSizeDp", xyPixelSizeDp)
                 .putInt("targetFps", targetFps)
                 .putBoolean("showMeasurements", showMeasurements)
-                .putBoolean("preRenderFft", preRenderFft)
                 .putFloat("waterfallSpeed", waterfallSpeed)
                 .putFloat("waterfallBlack", waterfallBlack)
                 .putFloat("waterfallWhite", waterfallWhite)

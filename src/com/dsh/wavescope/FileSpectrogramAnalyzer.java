@@ -34,7 +34,8 @@ public final class FileSpectrogramAnalyzer {
         void onProgress(int percent, String message);
 
         void onComplete(Bitmap bitmap, WaveformData waveform,
-                        int sampleRate, int channels, long durationUs);
+                        int sampleRate, int channels, long durationUs,
+                        PcmFileSource pcmSource);
 
         void onError(String message);
     }
@@ -82,6 +83,7 @@ public final class FileSpectrogramAnalyzer {
     private void run(int mySession) {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
         File pcm = new File(context.getCacheDir(), "ws-spectrum-" + System.nanoTime() + ".pcm");
+        boolean keepPcm = false;
         try {
             DecodedInfo info = decodeToPcm(pcm, mySession);
             if (canceled || mySession != session) {
@@ -108,12 +110,16 @@ public final class FileSpectrogramAnalyzer {
             }
             final Bitmap result = bitmap;
             final WaveformData waveformResult = waveform;
+            final PcmFileSource pcmSource = new PcmFileSource(
+                    pcm, info.sampleRate, info.channels);
+            keepPcm = true;
             main.post(() -> {
                 if (!canceled && mySession == session) {
                     listener.onComplete(result, waveformResult,
-                            info.sampleRate, info.channels, info.durationUs);
+                            info.sampleRate, info.channels, info.durationUs, pcmSource);
                 } else {
                     result.recycle();
+                    pcmSource.close();
                 }
             });
         } catch (Exception e) {
@@ -138,8 +144,10 @@ public final class FileSpectrogramAnalyzer {
                 });
             }
         } finally {
-            //noinspection ResultOfMethodCallIgnored
-            pcm.delete();
+            if (!keepPcm) {
+                //noinspection ResultOfMethodCallIgnored
+                pcm.delete();
+            }
         }
     }
 
