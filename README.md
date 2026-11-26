@@ -55,3 +55,15 @@ src/com/dsh/wavescope/
 res/
 icon-preview.png
 ```
+
+
+## 许可证
+
+本项目采用 **WaveScope Source-Available License 1.0**：
+
+- 可自由使用、复制、分发、商用、套壳、收费
+- 可闭源发布使用本库的应用程序
+- **不允许修改、改造、翻译或创作本库的衍生版本**
+- 必须保留版权声明和许可证
+
+这不是 OSI 认可的开源许可证。完整条款见 [LICENSE](LICENSE)。
